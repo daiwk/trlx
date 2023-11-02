@@ -198,6 +198,15 @@ class TrainConfig:
 
     :param minibatch_size: Size of model input during one forward pass. Must divide batch size
     :type minibatch_size: int
+
+    :param data_type: Type of data, normal or stream
+    :type data_type: str
+
+    :param data_size: Size of data size when data_type=`stream`
+    :type data_size: int
+
+    :param skip_first_eval: Whether skip first evaluation before training
+    :type skip_first_eval: bool
     """
 
     total_steps: int
@@ -230,6 +239,11 @@ class TrainConfig:
     seed: int = 1000
 
     minibatch_size: Optional[int] = None
+
+    data_type: str = "normal"
+    data_size: int = 0
+
+    skip_first_eval: bool = False
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):

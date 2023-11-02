@@ -6,6 +6,7 @@ from trlx.data.configs import TRLConfig
 from trlx.data.method_configs import MethodConfig, register_method
 from trlx.pipeline.offline_pipeline import (
     DialogStore,
+    DialogStreamStore,
     PromptPipeline,
     tokenize_dialogue,
 )
@@ -36,6 +37,8 @@ class AccelerateSFTTrainer(AccelerateRLTrainer):
             eos_token_id=self.tokenizer.eos_token_id,
             pad_token_id=self.tokenizer.pad_token_id,
         )
+        self.data_type = config.train.data_type
+        self.data_size = config.train.data_size
 
     def get_arch(self, config):
         from_fn = AutoModelForCausalLM.from_pretrained
@@ -86,10 +89,19 @@ class AccelerateSFTTrainer(AccelerateRLTrainer):
         ) = self.accelerator.prepare(self.model, self.opt, eval_dataloader)
 
         self.n_inner_epochs = 1
-        self.total_steps = self.config.train.epochs * len(self.train_dataloader)
+        if self.data_type == "stream":
+            training_data_size = self.data_size
+        else:
+            training_data_size = len(self.train_dataloader)
+        self.total_steps = self.config.train.epochs * training_data_size
         self.total_steps = min(self.total_steps, self.config.train.total_steps)
 
     def make_experience(self, samples, seq_length):
+        if self.data_type == "stream":
+            # samples is a iterator in `stream` data_type
+            self.store = DialogStreamStore(dialogs_iter=samples, data_size=self.data_size,
+                                           tokenizer=self.tokenizer, seq_length=seq_length)
+            return
         if isinstance(samples[0], str):
             self.store = PromptPipeline(samples, seq_length, self.tokenizer)
         else:

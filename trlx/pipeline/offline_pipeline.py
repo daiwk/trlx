@@ -16,7 +16,7 @@ from trlx.data.ilql_types import (
     ILQLSeq2SeqBatch,
     ILQLSeq2SeqElement,
 )
-from trlx.pipeline import BasePipeline, BaseRolloutStore, register_datapipeline
+from trlx.pipeline import BasePipeline, BaseRolloutStore, BaseRolloutStreamStore, register_datapipeline
 
 
 @dataclass
@@ -100,6 +100,37 @@ class DialogStore(BaseRolloutStore):
         self.history = [
             dict(input_ids=i, attention_mask=a, labels=l) for i, a, l in zip(input_ids, attention_masks, labels)
         ]
+
+    def create_loader(self, batch_size: int, shuffle=False) -> DataLoader:
+        hf_collate_fn = DataCollatorWithPadding(self.tokenizer)
+
+        def collate_fn(elems: Iterable[dict]):
+            batch = hf_collate_fn(
+                {"input_ids": [e["input_ids"] for e in elems], "attention_mask": [e["attention_mask"] for e in elems]}
+            )
+            labels = hf_collate_fn([{"input_ids": e["labels"]} for e in elems])["input_ids"]
+            batch["labels"] = labels
+            return batch
+
+        return DataLoader(self, batch_size=batch_size, collate_fn=collate_fn, shuffle=shuffle)
+
+
+class DialogStreamStore(BaseRolloutStreamStore):
+    def __init__(self, dialogs_iter: List[List[DialogMessage]], data_size: int,
+                 tokenizer: PreTrainedTokenizer, seq_length: int):
+        super().__init__(dialogs_iter, data_size)
+        self.tokenizer = tokenizer
+        self.seq_length = seq_length
+
+    def __getitem__(self, index: int):
+        sample = self.iterator.__getitem__(index)
+        dialog = tokenize_dialogue(sample, self.tokenizer, self.seq_length)
+        attention_mask = torch.ones(sum(len(m.tokens) for m in dialog), dtype=torch.bool)
+        input_id = torch.tensor([t for m in dialog for t in m.tokens], dtype=torch.long)
+        # -100 is the ignore index for CrossEntropyLoss
+        labels = torch.tensor([t if m.is_output else -100 for m in dialog for t in m.tokens], dtype=torch.long)
+        data = dict(input_ids=input_id, attention_mask=attention_mask, labels=labels)
+        return data
 
     def create_loader(self, batch_size: int, shuffle=False) -> DataLoader:
         hf_collate_fn = DataCollatorWithPadding(self.tokenizer)

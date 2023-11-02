@@ -46,6 +46,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
     def __init__(self, config, **kwargs):  # noqa: C901
         super().__init__(config, **kwargs)
         self.max_length = config.train.seq_length
+        self.skip_first_eval = config.train.skip_first_eval
         if config.train.minibatch_size:
             assert config.train.batch_size % config.train.minibatch_size == 0, "Minibatch size must divide batch size"
             self.mb_size = config.train.minibatch_size
@@ -534,7 +535,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
                     with open(os.path.join(dir, "state.json")) as f:
                         state = json.load(f)
                         self.iter_count = state["iter_count"]
-        else:
+        elif not self.skip_first_eval:
             results = self.evaluate()
             self.accelerator.log(results, step=self.iter_count)
 

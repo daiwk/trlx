@@ -102,6 +102,31 @@ class BaseRolloutStore(Dataset):
         pass
 
 
+class BaseRolloutStreamStore(Dataset):
+    def __init__(self, iterator, data_size):
+        self.iterator = iterator
+        self.data_size = data_size
+
+    def __len__(self) -> int:
+        return self.data_size
+
+    @abstractmethod
+    def create_loader(
+        self,
+        batch_size: int,
+        shuffle: bool,
+        prep_fn: Callable = None,
+        num_workers: int = 0,
+    ) -> DataLoader:
+        """
+        Create a dataloader for the rollout store
+
+        :param prep_fn: Applied to RLElement after collation (typically tokenizer)
+        :type prep_fn: Callable
+        """
+        pass
+
+
 class MiniBatchIterator:
     """
     A custom iterator for generating mini-batches from a PyTorch DataLoader.
