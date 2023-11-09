@@ -488,8 +488,16 @@ class AccelerateRLTrainer(BaseRLTrainer):
                     table_title += f" {k}: {significant(x)}"
 
             rich_table = Table(*columns, title=table_title, show_lines=True)
-            for ix in range(max(min(3, len(rows)), len(gen_sweep_values))):
+            for ix in range(max(min(10, len(rows)), len(gen_sweep_values))):
                 rich_table.add_row(*[str(significant(x)) for x in rows[ix]])
+            print('-' * 100)
+            prompts, results = columns_data
+            msgs = []
+            for prompt, result in zip(prompts, results):
+                msgs.append('%s\n%s\n%s' % (prompt, result, '-'*100))
+                if len(msgs) > 10:
+                    break
+            print('\n'.join(msgs))
             Console().print(rich_table)
 
             if self.config.train.tracker == "wandb":

@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Tuple, Union
 
@@ -61,13 +62,51 @@ def tokenize_dialogue(  # noqa: C901
     if tokenizer.truncation_side == "left":
         tokenized = [DialogMessage(is_output=m.is_output, tokens=m.tokens[::-1]) for m in tokenized[::-1]]
 
-    # truncate if necessary
-    lengths = [len(t.tokens) for t in tokenized]
-    cumsum_lengths = [sum(lengths[:i]) for i in range(len(lengths))]
-    truncated = [
-        DialogMessage(is_output=t.is_output, tokens=t.tokens[: max(max_length - cl, 0)])
-        for t, cl in zip(tokenized, cumsum_lengths)
-    ]
+    if tokenizer.truncation_side.startswith("middle"):
+        # TODO: only support one dialog message for now
+        assert len(tokenized) == 2
+        prompt_token_num = len(tokenized[0].tokens)
+        output_token_num = len(tokenized[1].tokens)
+        if prompt_token_num + output_token_num > max_length:
+            # only truncate prompt
+            start_char_idx = end_char_idx = -1
+            for i, token_id in enumerate(tokenized[0].tokens):
+                if start_char_idx == -1 and token_id == tokenizer.start_char_token_id:
+                    start_char_idx = i
+                if end_char_idx == -1 and token_id == tokenizer.end_char_token_id:
+                    end_char_idx = i
+                if start_char_idx != -1 and end_char_idx != -1:
+                    break
+            if start_char_idx == -1 or end_char_idx == -1:
+                logging.warn("cannot find start_char_token_id[%s] or end_char_token_id[%s] in input_tokens[%s]" %
+                             (tokenizer.start_char_token_id, tokenizer.end_char_token_id, tokenized[0].tokens))
+                start_char_idx, end_char_idx = 0, len(tokenized[0].tokens) - 1
+            middle_part = tokenized[0].tokens[start_char_idx+1:end_char_idx]
+            middle_max_len = max_length - output_token_num - (prompt_token_num - len(middle_part))
+            if middle_max_len < 0:
+                raise RuntimeError("please shorten the prompt or output, max_length: %d, prompt_token_num: %d, " +
+                                   "output_token_num: %d, middle_max_len: %d" %
+                                   (max_length, prompt_token_num, output_token_num, middle_max_len))
+            if tokenizer.truncation_side == "middle-right":
+                middle_part = middle_part[::-1]
+            while len(middle_part) > middle_max_len:
+                try:
+                    middle_part = middle_part[middle_part.index(tokenizer.sep_char_token_id)+1:]
+                except:
+                    middle_part = ()
+                    break
+            if tokenizer.truncation_side == "middle-right":
+                middle_part = middle_part[::-1]
+            tokenized[0].tokens = tokenized[0].tokens[:start_char_idx+1] + middle_part + tokenized[0].tokens[end_char_idx:]
+        truncated = tokenized
+    else:
+        # truncate if necessary
+        lengths = [len(t.tokens) for t in tokenized]
+        cumsum_lengths = [sum(lengths[:i]) for i in range(len(lengths))]
+        truncated = [
+            DialogMessage(is_output=t.is_output, tokens=t.tokens[: max(max_length - cl, 0)])
+            for t, cl in zip(tokenized, cumsum_lengths)
+        ]
 
     # flip back if was fliped to left truncate
     if tokenizer.truncation_side == "left":
@@ -121,6 +160,16 @@ class DialogStreamStore(BaseRolloutStreamStore):
         super().__init__(dialogs_iter, data_size)
         self.tokenizer = tokenizer
         self.seq_length = seq_length
+        if self.tokenizer.truncation_side.startswith("middle"):
+            assert "middle_start_char" in tokenizer.init_kwargs
+            assert "middle_end_char" in tokenizer.init_kwargs
+            assert "middle_sep_char" in tokenizer.init_kwargs
+            start_char_token_id = self.tokenizer(tokenizer.init_kwargs["middle_start_char"]).input_ids[-1]
+            end_char_token_id = self.tokenizer(tokenizer.init_kwargs["middle_end_char"]).input_ids[-1]
+            sep_char_token_id = self.tokenizer(tokenizer.init_kwargs["middle_sep_char"]).input_ids[-1]
+            setattr(self.tokenizer, "start_char_token_id", start_char_token_id)
+            setattr(self.tokenizer, "end_char_token_id", end_char_token_id)
+            setattr(self.tokenizer, "sep_char_token_id", sep_char_token_id)
 
     def __getitem__(self, index: int):
         sample = self.iterator.__getitem__(index)
