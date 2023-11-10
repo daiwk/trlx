@@ -47,6 +47,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
         super().__init__(config, **kwargs)
         self.max_length = config.train.seq_length
         self.skip_first_eval = config.train.skip_first_eval
+        self.eval_max_show_num = config.train.eval_max_show_num
         if config.train.minibatch_size:
             assert config.train.batch_size % config.train.minibatch_size == 0, "Minibatch size must divide batch size"
             self.mb_size = config.train.minibatch_size
@@ -495,7 +496,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
             msgs = []
             for prompt, result in zip(prompts, results):
                 msgs.append('%s\n%s\n%s' % (prompt, result, '-'*100))
-                if len(msgs) > 10:
+                if len(msgs) >= self.eval_max_show_num:
                     break
             print('\n'.join(msgs))
             Console().print(rich_table)

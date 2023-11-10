@@ -207,6 +207,9 @@ class TrainConfig:
 
     :param skip_first_eval: Whether skip first evaluation before training
     :type skip_first_eval: bool
+
+    :param eval_max_show_num: Max results to show when evaluation
+    :type eval_max_show_num: int
     """
 
     total_steps: int
@@ -244,6 +247,8 @@ class TrainConfig:
     data_size: int = 0
 
     skip_first_eval: bool = False
+
+    eval_max_show_num: int = 10
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]):
