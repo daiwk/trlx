@@ -492,7 +492,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
             for ix in range(max(min(10, len(rows)), len(gen_sweep_values))):
                 rich_table.add_row(*[str(significant(x)) for x in rows[ix]])
             print('-' * 100)
-            prompts, results = columns_data
+            prompts, results, *_ = columns_data
             msgs = []
             for prompt, result in zip(prompts, results):
                 msgs.append('%s\n%s\n%s' % (prompt, result, '-'*100))
