@@ -142,6 +142,7 @@ def hf_get_decoder_blocks(model: nn.Module) -> Tuple[nn.Module]:
         "transformer.h",
         "transformer.blocks",
         "model.decoder.layers",
+        "encoder.layers",
         "gpt_neox.layers",
         "transformer.encoder.layers",
         "decoder.block",
